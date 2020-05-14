@@ -12,9 +12,13 @@ options(scipen = 999)
 ins.pack("tidyverse", 
          "pastecs", 
          "data.table", 
-         "ggplot2", 
-         "plotly")
-
+         "ggplot2",
+         "dygraphs",
+         "xts", 
+         "lubridate", 
+         "ggthemes", 
+         "plotly", 
+         "hrbrthemes")
 # read the file -----------------------------------------------------------
 
 # read the file with specified format
@@ -57,29 +61,136 @@ dt[ , day_e := format(end, "%d")]
 
 # format:year-month-day ---------------------------------------------------
 
-dt[, date_s := format(start, "%Y-%m-%d")]
-dt[, date_e := format(end, "%Y-%m-%d")]
+dt[ , date_s := format(start, "%Y-%m-%d")]
+dt[ , date_e := format(end, "%Y-%m-%d")]
 
 
 # sum: day ----------------------------------------------------------------
 
-# tidyverse
-dt1 <- dt %>% 
-        group_by(member_id, day_s) %>% 
-        summarise(daily_day = sum(diff_day))
+# # tidyverse
+# dt1 <- dt %>%
+        # group_by(member_id, started_at, ended_at) %>% 
+        # summarise(daily_day = sum(diff_day))
+
+# debug:duplicated --------------------------------------------------------
+
+# select
+test <- dt[ , c("member_id", "started_at")]
+
+# indices
+dupe_indices <- duplicated(test) | duplicated(test, fromLast = TRUE)
+
+# dupe
+dupe <- dt[dupe_indices, c("member_id", "started_at", "ended_at", "duration")]
+
+# diff
+dupe[ , diff := as.numeric(ended_at - started_at)]
+setorderv(dup, c("member_id", "started_at", "ended_at"))
+
+# check if 
+dup[(duration / 1000) != diff, ]
+
+dup2 <- unique(dup)
+
+d <- spread(dup2, diff, key = member_id)
+
+
+# calc --------------------------------------------------------------------
 
 # data.table
 dt2 <- dt[, c("member_id", "day_s", "week_s", "date_s", "diff_min")]
 dt2 <- dt2[ , lapply(.SD, sum), by = .(member_id, day_s, week_s, date_s)]
-dt2 <- setorderv(dt2, c("member_id", "date_s", "day_s"))
+setorderv(dt2, c("member_id", "date_s", "day_s"))
 head(dt2)
 
-dt2[ , diff_min := as.numeric(diff_min)]
+# data.table
+dt2 <- dt[ , c("member_id", "day_s", "week_s", "date_s", "diff_hr")]
+dt2 <- dt2[ , lapply(.SD, sum), by = .(day_s, week_s, date_s, member_id)]
+setorderv(dt2, c("date_s", "day_s"))
 head(dt2)
-p <- dt2 %>% 
-        filter(member_id == 1061) 
-        ggplot(aes(x = date_s, y = diff_min), data = p) +
-        geom_bar(stat = "identity")
+
+# total hours each day
+dt_hr <- dt[ , c("date_s", "diff_hr")]
+# sum and keyby date_s
+dt_hr <- dt_hr[ , lapply(.SD, sum), keyby = .(date_s)]
+head(dt_hr)
+
+# number of members each day
+dt_member <- dt2[ , .N, by = .(date_s, week_s, day_s)]
+head(dt_member)
+
+# cbind
+dt_test <- dt_hr[dt_member][ , avr_hr := diff_hr / N][ , avr_hr := as.numeric(avr_hr)]
+
+# weekdays, weekends
+dt_test[ , weekend := factor(ifelse(week_s == 6, "Sat", ifelse(week_s == 0, "Sun", "weekday")))]
+dt_test[ , date_s := ymd(date_s)]
+head(dt_test)
+
+
+# dygraphs ----------------------------------------------------------------
+
+t <- xts(x = dt_test$avr_hr, order.by = dt_test$date_s)
+p <- dygraph(t) %>% 
+        dyOptions(fillGraph = TRUE)
 p
-p
-head(p)
+
+# plot --------------------------------------------------------------------
+
+# user per day
+p1 <- ggplot(data = dt_test) +
+        geom_bar(aes(x = date_s, y = N, fill = `weekend`), 
+                 color = c("white"),
+                 stat = "identity", alpha = .8) +
+        scale_x_discrete(name = "Date") +
+        scale_y_continuous(name = "number of users per day", 
+                           expand = c(0, 0), 
+                           limits = c(0, max(dt_test$N) + 80)) +
+        scale_fill_manual("", 
+                          values = c("Sat" = "#04BFAD", 
+                                     "Sun" = "#F28D8D", 
+                                     "weekday" = "lightgrey")) +
+        sjPlot::theme_sjplot2() +
+        theme(axis.text.x = element_text(angle = 90), 
+              legend.position = "top")
+p1
+
+p2 <- ggplot(data = dt_test) + 
+        geom_line(aes(x = date_s, y = avr_hr, color = `weekend`), 
+                  size = 1.2, 
+                  group = 1) + 
+        geom_area(aes(x = date_s, y = avr_hr), 
+                  fill = "#69b3a2",
+                  size = .5, 
+                  alpha = .5, 
+                  group = 1) + 
+        scale_x_discrete(name = "Date") + 
+        scale_y_continuous(name = "average usage time (hr/member)") +
+        scale_fill_manual("", 
+                          values = c("Sat" = "#04BFAD", 
+                                     "Sun" = "#F28D8D", 
+                                     "weekday" = "lightgrey")) +
+        scale_color_manual("", 
+                          values = c("Sat" = "#04BFAD", 
+                                     "Sun" = "#F28D8D", 
+                                     "weekday" = "lightgrey")) +
+        sjPlot::theme_sjplot2() +
+        theme(axis.text.x = element_text(angle = 90), 
+              legend.position = "top")
+p2 <- ggplotly(p2)
+p2
+
+
+ggplotly(gridExtra::grid.arrange(p1, p2, nrow = 2))
+
+
+# ribbon ------------------------------------------------------------------
+
+dates <- c("02/01/00", "02/04/00", "02/07/00", "02/10/00", "02/01/01", "02/04/01", "02/07/01", "02/10/01")
+dat <- data.frame(date=as.Date(dates, "%d/%m/%y"), count=(sample(1:8)))
+dat["month"] <- as.factor(month(dat$date))
+dat["df"] <- as.factor(dat$date)
+
+dat2 <-data.frame(date=dat$date[-1],count=dat$count[-1], month=dat$month[-8],df=dat$df[-8])
+dat3 <- rbind(dat,dat2)
+ggplot(data=dat3, aes(x=date, ymax=count, ymin=0, group=df, fill=month)) + geom_ribbon()
