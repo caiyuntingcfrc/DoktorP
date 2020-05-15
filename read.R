@@ -89,10 +89,8 @@ setorderv(dup, c("member_id", "started_at", "ended_at"))
 
 # check if 
 dup[(duration / 1000) != diff, ]
-
 dup2 <- unique(dup)
 
-d <- spread(dup2, diff, key = member_id)
 
 
 # calc --------------------------------------------------------------------
@@ -132,7 +130,7 @@ head(dt_test)
 
 t <- xts(x = dt_test$avr_hr, order.by = dt_test$date_s)
 p <- dygraph(t) %>% 
-        dyOptions(fillGraph = TRUE)
+        dyOptions(stemPlot = TRUE)
 p
 
 # plot --------------------------------------------------------------------
@@ -142,7 +140,7 @@ p1 <- ggplot(data = dt_test) +
         geom_bar(aes(x = date_s, y = N, fill = `weekend`), 
                  color = c("white"),
                  stat = "identity", alpha = .8) +
-        scale_x_discrete(name = "Date") +
+        scale_x_date(name = "Date", date_breaks = "1 day") +
         scale_y_continuous(name = "number of users per day", 
                            expand = c(0, 0), 
                            limits = c(0, max(dt_test$N) + 80)) +
@@ -151,7 +149,8 @@ p1 <- ggplot(data = dt_test) +
                                      "Sun" = "#F28D8D", 
                                      "weekday" = "lightgrey")) +
         sjPlot::theme_sjplot2() +
-        theme(axis.text.x = element_text(angle = 90), 
+        theme(axis.text.x = element_text(angle = 90, 
+                                         vjust = .5), 
               legend.position = "top")
 p1
 
@@ -159,17 +158,8 @@ p2 <- ggplot(data = dt_test) +
         geom_line(aes(x = date_s, y = avr_hr, color = `weekend`), 
                   size = 1.2, 
                   group = 1) + 
-        geom_area(aes(x = date_s, y = avr_hr), 
-                  fill = "#69b3a2",
-                  size = .5, 
-                  alpha = .5, 
-                  group = 1) + 
-        scale_x_discrete(name = "Date") + 
+        scale_x_date(name = "Date", date_breaks = "1 day") + 
         scale_y_continuous(name = "average usage time (hr/member)") +
-        scale_fill_manual("", 
-                          values = c("Sat" = "#04BFAD", 
-                                     "Sun" = "#F28D8D", 
-                                     "weekday" = "lightgrey")) +
         scale_color_manual("", 
                           values = c("Sat" = "#04BFAD", 
                                      "Sun" = "#F28D8D", 
@@ -177,11 +167,10 @@ p2 <- ggplot(data = dt_test) +
         sjPlot::theme_sjplot2() +
         theme(axis.text.x = element_text(angle = 90), 
               legend.position = "top")
-p2 <- ggplotly(p2)
 p2
 
 
-ggplotly(gridExtra::grid.arrange(p1, p2, nrow = 2))
+gridExtra::grid.arrange(p1, p2, nrow = 2)
 
 
 # ribbon ------------------------------------------------------------------
