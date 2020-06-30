@@ -22,8 +22,12 @@ ins.pack("tidyverse",
 # read the file -----------------------------------------------------------
 
 # read the file with specified format
-dt <- read_csv("Dr Parenting/usagetime/usage_time_20191026-20191125_new.csv", 
+# dt <- read_csv("Dr Parenting/usagetime/usage_time_20191026-20191125_new.csv",
+               # col_types = "cccdTTd")
+dt <- read_csv("Dr Parenting/usagetime/usage_time_20200426-20200525.csv", 
                col_types = "cccdTTd")
+
+# dt_goodhabit <- read_csv("Dr Parenting/goodhabit/good_habit_20200426-20200525.csv")
 # setDT
 setDT(dt)
 
@@ -72,26 +76,26 @@ dt[ , date_e := format(end, "%Y-%m-%d")]
         # group_by(member_id, started_at, ended_at) %>% 
         # summarise(daily_day = sum(diff_day))
 
-# debug:duplicated --------------------------------------------------------
-
-# select
-test <- dt[ , c("member_id", "started_at")]
-
-# indices
-dupe_indices <- duplicated(test) | duplicated(test, fromLast = TRUE)
-
-# dupe
-dupe <- dt[dupe_indices, c("member_id", "started_at", "ended_at", "duration")]
-
-# diff
-dupe[ , diff := as.numeric(ended_at - started_at)]
-setorderv(dup, c("member_id", "started_at", "ended_at"))
-
-# check if 
-dup[(duration / 1000) != diff, ]
-dup2 <- unique(dup)
-
-
+# # debug:duplicated --------------------------------------------------------
+# 
+# # select
+# test <- dt[ , c("member_id", "started_at")]
+# 
+# # indices
+# dupe_indices <- duplicated(test) | duplicated(test, fromLast = TRUE)
+# 
+# # dupe
+# dupe <- dt[dupe_indices, c("member_id", "started_at", "ended_at", "duration")]
+# 
+# # diff
+# dupe[ , diff := as.numeric(ended_at - started_at)]
+# setorderv(dup, c("member_id", "started_at", "ended_at"))
+# 
+# # check if 
+# dup[(duration / 1000) != diff, ]
+# dup2 <- unique(dup)
+# 
+# 
 
 # calc --------------------------------------------------------------------
 
@@ -141,9 +145,9 @@ p1 <- ggplot(data = dt_test) +
                  color = c("white"),
                  stat = "identity", alpha = .8) +
         scale_x_date(name = "Date", date_breaks = "1 day") +
-        scale_y_continuous(name = "number of users per day", 
-                           expand = c(0, 0), 
-                           limits = c(0, max(dt_test$N) + 80)) +
+        scale_y_continuous(name = "number of users per day") +  
+                           # expand = c(0, 0), 
+                           # limits = c(0, max(dt_test$N) + 80)) +
         scale_fill_manual("", 
                           values = c("Sat" = "#04BFAD", 
                                      "Sun" = "#F28D8D", 
@@ -155,15 +159,15 @@ p1 <- ggplot(data = dt_test) +
 p1
 
 p2 <- ggplot(data = dt_test) + 
-        geom_line(aes(x = date_s, y = avr_hr, color = `weekend`), 
+        geom_line(aes(x = date_s, y = avr_hr), 
                   size = 1.2, 
                   group = 1) + 
         scale_x_date(name = "Date", date_breaks = "1 day") + 
         scale_y_continuous(name = "average usage time (hr/member)") +
-        scale_color_manual("", 
-                          values = c("Sat" = "#04BFAD", 
-                                     "Sun" = "#F28D8D", 
-                                     "weekday" = "lightgrey")) +
+        # scale_color_manual("", 
+        #                   values = c("Sat" = "#04BFAD", 
+        #                              "Sun" = "#F28D8D", 
+        #                              "weekday" = "lightgrey")) +
         sjPlot::theme_sjplot2() +
         theme(axis.text.x = element_text(angle = 90), 
               legend.position = "top")
@@ -172,6 +176,19 @@ p2
 
 gridExtra::grid.arrange(p1, p2, nrow = 2)
 
+
+# filter: my ids ----------------------------------------------------------
+
+devID <- "f73632ba83d6473de61722c4268b32ba"
+devID <- "f73632"
+grep(devID, dt_goodhabit$device_id, value = TRUE) %>% unique()
+
+
+grep(devID, dt$account_id)
+
+myUsage <- dt %>% 
+        filter(device_id == devID)
+length(dt$device_id[1])
 
 # ribbon ------------------------------------------------------------------
 
