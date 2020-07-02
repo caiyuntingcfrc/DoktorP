@@ -77,16 +77,19 @@ dt[ , date_e := format(end, "%Y-%m-%d")]
         # summarise(daily_day = sum(diff_day))
 
 # # debug:duplicated --------------------------------------------------------
-# 
-# # select
-# test <- dt[ , c("member_id", "started_at")]
-# 
+# select
+test1 <- dt[ , c("member_id", "started_at")]
+# test1 <- unique(dt)
 # # indices
-# dupe_indices <- duplicated(test) | duplicated(test, fromLast = TRUE)
-# 
-# # dupe
-# dupe <- dt[dupe_indices, c("member_id", "started_at", "ended_at", "duration")]
-# 
+dupe_indices1 <- duplicated(test1) | duplicated(test1, fromLast = TRUE)
+# dupe
+dupe1 <- dt[dupe_indices1, ]
+dp <- unique(dupe1)
+
+# test
+test <- dupe1[member_id == member_id[1], c("account_id", "device_id", "member_id", 
+                                           "start", "end", "duration", "diff_sec")]
+
 # # diff
 # dupe[ , diff := as.numeric(ended_at - started_at)]
 # setorderv(dup, c("member_id", "started_at", "ended_at"))
@@ -178,17 +181,25 @@ gridExtra::grid.arrange(p1, p2, nrow = 2)
 
 
 # filter: my ids ----------------------------------------------------------
-
-devID <- "f73632ba83d6473de61722c4268b32ba"
-devID <- "f73632"
+id <- "fe803a7862fffe66fcac"
+devID1 <- "f73632ba-83d6-473d0-e617-22c4268b32ba"
+devID2 <- "f73632ba83d6473d0e61722c4268b32ba"
+devID3 <- "8489673b-0baf-7b52-2a11-decdcef935af"
+devID4 <- "8489673b0baf7b522a11decdcef935af"
+devID <- "^7c4eb489"
 grep(devID, dt_goodhabit$device_id, value = TRUE) %>% unique()
 
 
-grep(devID, dt$account_id)
+grep(devID, dt$account_id, value = TRUE)
+grep(devID, dt$device_id, value = TRUE)
+d1 <- dt[grep("^7c", dt$account_id), ]
+d2 <- dt[grep("^e34", dt$device_id), ]
+
 
 myUsage <- dt %>% 
-        filter(device_id == devID)
-length(dt$device_id[1])
+        filter(account_id == devID2)
+        # filter(device_id == devID)
+# length(dt$device_id[1])
 
 # ribbon ------------------------------------------------------------------
 
