@@ -19,15 +19,36 @@ ins.pack("tidyverse",
          "ggthemes", 
          "plotly", 
          "hrbrthemes")
+
+# log file ----------------------------------------------------------------
+
+# timestamp
+timestamp <- format(Sys.time(), "%m%d-%H%M")
+# processing time
+ptm <- proc.time()
+
+# file names
+file_name <- file.choose()
+# file directory
+file_path <- paste(dirname(file_name), "/", "analysis", sep = "")
+# create an "analysis" directory
+if(length(dir(file_path)) == 0) {
+        dir.create(file_path)
+}
+# output text file of anlysis
+output_file_path <- paste(file_path, "/", timestamp, ".txt", sep = "")
+# add to analysis file
+cat("##### file #####\n", paste("The file is ", file_name, sep = ""), 
+    file = output_file_path, sep = "\n", append = FALSE)
+
 # read the file -----------------------------------------------------------
 
 # read the file with specified format
-# dt <- read_csv("Dr Parenting/usagetime/usage_time_20191026-20191125_new.csv",
-               # col_types = "cccdTTd")
-dt <- read_csv("Dr Parenting/usagetime/usage_time_20200426-20200525.csv", 
+dt <- read_csv(file = file_name, 
                col_types = "cccdTTd")
-
-# dt_goodhabit <- read_csv("Dr Parenting/goodhabit/good_habit_20200426-20200525.csv")
+# add to analysis file
+cat("\n##### n:raw #####\n", paste0("the data has ", nrow(dt), " cases"), 
+    file = output_file_path, sep = "\n", append = TRUE)
 # setDT
 setDT(dt)
 
@@ -76,29 +97,50 @@ dt[ , date_e := format(end, "%Y-%m-%d")]
         # group_by(member_id, started_at, ended_at) %>% 
         # summarise(daily_day = sum(diff_day))
 
-# # debug:duplicated --------------------------------------------------------
-# select
-test1 <- dt[ , c("member_id", "started_at")]
-# test1 <- unique(dt)
-# # indices
-dupe_indices1 <- duplicated(test1) | duplicated(test1, fromLast = TRUE)
-# dupe
-dupe1 <- dt[dupe_indices1, ]
-dp <- unique(dupe1)
+# debug: duration ---------------------------------------------------------
 
-# test
-test <- dupe1[member_id == member_id[1], c("account_id", "device_id", "member_id", 
-                                           "start", "end", "duration", "diff_sec")]
+# compare duration with diff_sec
+if(with(dt, all((duration / 1000) == diff_sec, na.rm = TRUE))){
+        # add to analysis file
+        cat("\n##### duration #####\n", 
+            "Duration is correct.", 
+            file = output_file_path, sep = "\n", append = TRUE)
+}
+
+# debug:duplicated --------------------------------------------------------
+
+# function fi()
+fi <- function(data){
+        m <- t(data)
+        m <- as.numeric(m[, which(m["duration", ] == max(m["duration", ]))]["n"])
+        return(m)
+}
+# 1: unique
+dt <- unique(dt)
+
+# 2: same started_at time but different ended_at
+# check with member_id and started_at
+check_dupe <- dt[ , c("account_id", "device_id", "member_id", "started_at")]
+# indices
+dupe_indices <- duplicated(check_dupe) | duplicated(check_dupe, fromLast = TRUE)
+# extract duplications and order by member_id
+dupe <- dt[dupe_indices, ][order(member_id), ]
+# recode n and s
+dupe <- dupe[ , n:= 1:.N][ , s := fi(.SD), by = list(member_id, started_at)]
+# apply fi()
+dupe[ , s := fi(.SD), by = list(member_id, started_at)]
+# extract rows with larger duration and remove s and n
+dupe <- dupe[n == s, ][ , c("n", "s"):= NULL]
+# row binding
+dt_c <- rbind(dt, dupe)[order(member_id), ]
+
+# add to analysis file
+cat("\n##### n:raw #####\n", paste0("the cleansed data has ", nrow(dt_c), " cases"), 
+    file = output_file_path, sep = "\n", append = TRUE)
 
 # # diff
 # dupe[ , diff := as.numeric(ended_at - started_at)]
 # setorderv(dup, c("member_id", "started_at", "ended_at"))
-# 
-# # check if 
-# dup[(duration / 1000) != diff, ]
-# dup2 <- unique(dup)
-# 
-# 
 
 # calc --------------------------------------------------------------------
 
