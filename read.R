@@ -5,7 +5,7 @@
 rm(list = ls()); cat("\14")
 devtools::source_url("https://raw.githubusercontent.com/caiyuntingcfrc/misc/function_poverty/func_ins.pack.R")
 # setwd
-setwd("d:/R_wd/")
+setwd("d:/R_wd/Dr Parenting/pcc_usagetime")
 # option: scipen
 options(scipen = 999)
 # load packages
@@ -39,6 +39,7 @@ if(length(dir(file_path)) == 0) {
 output_file_path <- paste(file_path, "/", timestamp, ".txt", sep = "")
 # add to analysis file
 cat("##### file #####\n", paste("The file is ", file_name, sep = ""), 
+    "\n", 
     file = output_file_path, sep = "\n", append = FALSE)
 
 # read the file -----------------------------------------------------------
@@ -47,7 +48,7 @@ cat("##### file #####\n", paste("The file is ", file_name, sep = ""),
 dt <- read_csv(file = file_name, 
                col_types = "cccdTTd")
 # add to analysis file
-cat("\n##### n:raw #####\n", paste0("the data has ", nrow(dt), " cases"), 
+cat("\n##### n:raw #####\n", paste0("the data has ", nrow(dt), " cases", "\n"), 
     file = output_file_path, sep = "\n", append = TRUE)
 # setDT
 setDT(dt)
@@ -84,7 +85,7 @@ dt[ , week_e := format(end, "%w")]
 dt[ , day_s := format(start, "%d")]
 dt[ , day_e := format(end, "%d")]
 
-# format:year-month-day ---------------------------------------------------
+# format: year-month-day --------------------------------------------------
 
 dt[ , date_s := format(start, "%Y-%m-%d")]
 dt[ , date_e := format(end, "%Y-%m-%d")]
@@ -103,11 +104,11 @@ dt[ , date_e := format(end, "%Y-%m-%d")]
 if(with(dt, all((duration / 1000) == diff_sec, na.rm = TRUE))){
         # add to analysis file
         cat("\n##### duration #####\n", 
-            "Duration is correct.", 
+            "Duration is correct.\n",
             file = output_file_path, sep = "\n", append = TRUE)
 }
 
-# debug:duplicated --------------------------------------------------------
+# debug: duplicated -------------------------------------------------------
 
 # function fi()
 fi <- function(data){
@@ -115,6 +116,7 @@ fi <- function(data){
         m <- as.numeric(m[, which(m["duration", ] == max(m["duration", ]))]["n"])
         return(m)
 }
+dupe_n1 <- nrow(dt) - nrow(unique(dt))
 # 1: unique
 dt <- unique(dt)
 
@@ -125,6 +127,18 @@ check_dupe <- dt[ , c("account_id", "device_id", "member_id", "started_at")]
 dupe_indices <- duplicated(check_dupe) | duplicated(check_dupe, fromLast = TRUE)
 # extract duplications and order by member_id
 dupe <- dt[dupe_indices, ][order(member_id), ]
+# save duplicated data (for PCC debugging)
+a <- str_extract(dir("duplicated/"), "[0-9]{4,}-[0-9]{4,}")
+b <- str_extract(file_name, "[0-9]{4,}-[0-9]{4,}")
+if(is.na(which(a == b))){
+    write_excel_csv(dupe[ , 1:7], 
+                    paste0(getwd(), "/duplicated/", "duplicated", "_", basename(file_name)))
+}
+# add to analysis file
+cat("\n##### duplicated #####\n", 
+    paste0("duplicated rows: ", dupe_n1, "\n"), 
+    paste0("duplicated rows with same start time: ", nrow(dupe), "\n"), 
+    file = output_file_path, sep = "\n", append = TRUE)
 # recode n and s
 dupe <- dupe[ , n:= 1:.N][ , s := fi(.SD), by = list(member_id, started_at)]
 # apply fi()
@@ -135,12 +149,48 @@ dupe <- dupe[n == s, ][ , c("n", "s"):= NULL]
 dt_c <- rbind(dt, dupe)[order(member_id), ]
 
 # add to analysis file
-cat("\n##### n:raw #####\n", paste0("the cleansed data has ", nrow(dt_c), " cases"), 
+cat("\n##### n:raw #####\n", 
+    paste0("the cleansed data has ", nrow(dt_c), " cases"), 
+    "\n", 
     file = output_file_path, sep = "\n", append = TRUE)
 
 # # diff
 # dupe[ , diff := as.numeric(ended_at - started_at)]
 # setorderv(dup, c("member_id", "started_at", "ended_at"))
+
+# filter: my ids ----------------------------------------------------------
+# # account ID
+# accID <- "13ad4046"
+# myUsage <- dt[grep(accID, dt$account_id), ]
+# 
+# # device ID
+# devID <- readLines("myDevID.txt")
+# myUsage <- dt %>% 
+#     filter(device_id == devID)
+# 
+# filePath <- paste0("d:/R_wd/Dr Parenting/pcc_myUsage/", b, "myUsage.csv"); filePath
+# write_excel_csv(myUsage, filePath)
+
+# save devID
+# devID <- myUsage$device_id[[1]]
+# fileConn <- file("myDevID.txt")
+# writeLines(devID, fileConn)
+# close(fileConn)
+
+# read: myUsage -----------------------------------------------------------
+
+fileDir <- "d:/R_wd/Dr Parenting/pcc_myUsage/"
+filePath <- paste0(fileDir, list.files(fileDir))
+
+df <- lapply(filePath, 
+             read.csv, 
+             fileEncoding = "CP950") %>% 
+    rbindlist()
+# names
+n <- c("account_id", names(df[ , -1]))
+setnames(df, n)
+
+dt <- df
 
 # calc --------------------------------------------------------------------
 
@@ -156,6 +206,17 @@ dt2 <- dt2[ , lapply(.SD, sum), by = .(day_s, week_s, date_s, member_id)]
 setorderv(dt2, c("date_s", "day_s"))
 head(dt2)
 
+# data.table
+dt2 <- dt[ , c("device_id", "day_s", "week_s", "date_s", "diff_hr")]
+dt2 <- dt2[ , lapply(.SD, sum), by = .(day_s, week_s, date_s, device_id)]
+setorderv(dt2, c("date_s", "day_s"))
+head(dt2)
+# data.table: date_e
+dt2 <- dt[ , c("device_id", "day_s", "week_e", "date_e", "diff_hr")]
+dt2 <- dt2[ , lapply(.SD, sum), by = .(day_s, week_e, date_e, device_id)]
+setorderv(dt2, c("date_e", "day_s"))
+summary(dt2$diff_hr)
+
 # total hours each day
 dt_hr <- dt[ , c("date_s", "diff_hr")]
 # sum and keyby date_s
@@ -166,13 +227,24 @@ head(dt_hr)
 dt_member <- dt2[ , .N, by = .(date_s, week_s, day_s)]
 head(dt_member)
 
+# number of devices each day
+dt_device <- dt2[ , .N, by = .(date_s, week_s, day_s)]
+head(dt_device)
+
 # cbind
-dt_test <- dt_hr[dt_member][ , avr_hr := diff_hr / N][ , avr_hr := as.numeric(avr_hr)]
+dt_test <- dt_hr[dt_device][ , avr_hr := diff_hr / N][ , avr_hr := as.numeric(avr_hr)]
 
 # weekdays, weekends
 dt_test[ , weekend := factor(ifelse(week_s == 6, "Sat", ifelse(week_s == 0, "Sun", "weekday")))]
 dt_test[ , date_s := ymd(date_s)]
 head(dt_test)
+
+
+# debug: hr ---------------------------------------------------------------
+
+dt_test <- dt[date_s %in% c("2020-06-19", "2020-06-20"), ]
+dt_test <- unique(dt_test)
+
 
 
 # dygraphs ----------------------------------------------------------------
@@ -220,28 +292,6 @@ p2
 
 
 gridExtra::grid.arrange(p1, p2, nrow = 2)
-
-
-# filter: my ids ----------------------------------------------------------
-id <- "fe803a7862fffe66fcac"
-devID1 <- "f73632ba-83d6-473d0-e617-22c4268b32ba"
-devID2 <- "f73632ba83d6473d0e61722c4268b32ba"
-devID3 <- "8489673b-0baf-7b52-2a11-decdcef935af"
-devID4 <- "8489673b0baf7b522a11decdcef935af"
-devID <- "^7c4eb489"
-grep(devID, dt_goodhabit$device_id, value = TRUE) %>% unique()
-
-
-grep(devID, dt$account_id, value = TRUE)
-grep(devID, dt$device_id, value = TRUE)
-d1 <- dt[grep("^7c", dt$account_id), ]
-d2 <- dt[grep("^e34", dt$device_id), ]
-
-
-myUsage <- dt %>% 
-        filter(account_id == devID2)
-        # filter(device_id == devID)
-# length(dt$device_id[1])
 
 # ribbon ------------------------------------------------------------------
 
