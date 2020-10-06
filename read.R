@@ -90,7 +90,6 @@ dt[ , day_e := format(end, "%d")]
 dt[ , date_s := format(start, "%Y-%m-%d")]
 dt[ , date_e := format(end, "%Y-%m-%d")]
 
-
 # sum: day ----------------------------------------------------------------
 
 # # tidyverse
@@ -108,55 +107,90 @@ if(with(dt, all((duration / 1000) == diff_sec, na.rm = TRUE))){
             file = output_file_path, sep = "\n", append = TRUE)
 }
 
-# debug: duplicated -------------------------------------------------------
+# # debug: duplicated -------------------------------------------------------
+# 
+# # function fi()
+# fi <- function(data){
+#         m <- t(data)
+#         m <- as.numeric(m[, which(m["duration", ] == max(m["duration", ]))]["n"])
+#         return(m)
+# }
+# dupe_n1 <- nrow(dt) - nrow(unique(dt))
+# 
+# # 1: unique
+# dt <- unique(dt)
+# # 2: same started_at time but different ended_at
+# # check with member_id and started_at
+# check_dupe <- dt[ , c("account_id", "device_id", "member_id", "started_at")]
+# # indices
+# dupe_indices <- duplicated(check_dupe) | duplicated(check_dupe, fromLast = TRUE)
+# # extract duplications and order by member_id
+# dupe <- dt[dupe_indices, ][order(member_id), ]
+# # save duplicated data (for PCC debugging)
+# a <- str_extract(dir("duplicated/"), "[0-9]{4,}-[0-9]{4,}")
+# b <- str_extract(file_name, "[0-9]{4,}-[0-9]{4,}")
+# if(is.na(which(a == b))){
+#     write_excel_csv(dupe[ , 1:7], 
+#                     paste0(getwd(), "/duplicated/", "duplicated", "_", basename(file_name)))
+# }
+# # add to analysis file
+# cat("\n##### duplicated #####\n", 
+#     paste0("duplicated rows: ", dupe_n1, "\n"), 
+#     paste0("duplicated rows with same start time: ", nrow(dupe), "\n"), 
+#     file = output_file_path, sep = "\n", append = TRUE)
+# # recode n and s
+# dupe <- dupe[ , n:= 1:.N][ , s := fi(.SD), by = list(member_id, started_at)]
+# # apply fi()
+# dupe[ , s := fi(.SD), by = list(member_id, started_at)]
+# # extract rows with larger duration and remove s and n
+# dupe <- dupe[n == s, ][ , c("n", "s"):= NULL]
+# # row binding
+# dt_c <- rbind(dt, dupe)[order(member_id), ]
+# 
+# # add to analysis file
+# cat("\n##### n:raw #####\n", 
+#     paste0("the cleansed data has ", nrow(dt_c), " cases"), 
+#     "\n", 
+#     file = output_file_path, sep = "\n", append = TRUE)
+# 
+# # # diff
+# # dupe[ , diff := as.numeric(ended_at - started_at)]
+# # setorderv(dup, c("member_id", "started_at", "ended_at"))
 
-# function fi()
-fi <- function(data){
-        m <- t(data)
-        m <- as.numeric(m[, which(m["duration", ] == max(m["duration", ]))]["n"])
-        return(m)
+# filter: account  ids ----------------------------------------------------
+
+# survey
+accID <- expss::read_spss("d:/R_wd/Dr Parenting/survey/20201005_merge.sav") %>% 
+    expss::drop_all_labels() %>% .$app_account_ID
+# Dr parenting
+pccID <- dt$account_id
+# grep
+l <- list()
+for(i in 1:length(accID)){
+    l[[i]] <- grep(accID[i], pccID)
 }
-dupe_n1 <- nrow(dt) - nrow(unique(dt))
-# 1: unique
-dt <- unique(dt)
-
-# 2: same started_at time but different ended_at
-# check with member_id and started_at
-check_dupe <- dt[ , c("account_id", "device_id", "member_id", "started_at")]
-# indices
-dupe_indices <- duplicated(check_dupe) | duplicated(check_dupe, fromLast = TRUE)
-# extract duplications and order by member_id
-dupe <- dt[dupe_indices, ][order(member_id), ]
-# save duplicated data (for PCC debugging)
-a <- str_extract(dir("duplicated/"), "[0-9]{4,}-[0-9]{4,}")
-b <- str_extract(file_name, "[0-9]{4,}-[0-9]{4,}")
-if(is.na(which(a == b))){
-    write_excel_csv(dupe[ , 1:7], 
-                    paste0(getwd(), "/duplicated/", "duplicated", "_", basename(file_name)))
+# subset
+dt <- dt[unlist(l), ]
+# order by member_id
+dt <- dt[order(member_id)]
+# extract device id and account id
+accountID <- unique(dt$account_id)
+deviceID <- unique(dt$device_id)
+memberID <- unique(dt$member_id)
+l <- list()
+for(i in 1:length(accountID)){
+    l[[i]] <- grep(substr(accountID[[i]], 1, 8), df$app_account_ID)
 }
-# add to analysis file
-cat("\n##### duplicated #####\n", 
-    paste0("duplicated rows: ", dupe_n1, "\n"), 
-    paste0("duplicated rows with same start time: ", nrow(dupe), "\n"), 
-    file = output_file_path, sep = "\n", append = TRUE)
-# recode n and s
-dupe <- dupe[ , n:= 1:.N][ , s := fi(.SD), by = list(member_id, started_at)]
-# apply fi()
-dupe[ , s := fi(.SD), by = list(member_id, started_at)]
-# extract rows with larger duration and remove s and n
-dupe <- dupe[n == s, ][ , c("n", "s"):= NULL]
-# row binding
-dt_c <- rbind(dt, dupe)[order(member_id), ]
-
-# add to analysis file
-cat("\n##### n:raw #####\n", 
-    paste0("the cleansed data has ", nrow(dt_c), " cases"), 
-    "\n", 
-    file = output_file_path, sep = "\n", append = TRUE)
-
-# # diff
-# dupe[ , diff := as.numeric(ended_at - started_at)]
-# setorderv(dup, c("member_id", "started_at", "ended_at"))
+# setDT
+df <- expss::read_spss("d:/R_wd/Dr Parenting/survey/20201005_merge.sav") %>% 
+    expss::drop_all_labels()
+setDT(df)
+# assign values
+df[unlist(l), device_id := deviceID]
+df[unlist(l), accound_id := accountID]
+df[unlist(l), member_id := memberID]
+# order
+df <- df[order(member_id)]
 
 # filter: my ids ----------------------------------------------------------
 # # account ID
@@ -177,50 +211,51 @@ cat("\n##### n:raw #####\n",
 # writeLines(devID, fileConn)
 # close(fileConn)
 
-# read: myUsage -----------------------------------------------------------
-
-fileDir <- "d:/R_wd/Dr Parenting/pcc_myUsage/"
-filePath <- paste0(fileDir, list.files(fileDir))
-
-df <- lapply(filePath, 
-             read.csv, 
-             fileEncoding = "CP950") %>% 
-    rbindlist()
-# names
-n <- c("account_id", names(df[ , -1]))
-setnames(df, n)
-
-dt <- df
+# # read: myUsage -----------------------------------------------------------
+# 
+# fileDir <- "d:/R_wd/Dr Parenting/pcc_myUsage/"
+# filePath <- paste0(fileDir, list.files(fileDir))
+# 
+# df <- lapply(filePath, 
+#              read.csv, 
+#              fileEncoding = "CP950") %>% 
+#     rbindlist()
+# # names
+# n <- c("account_id", names(df[ , -1]))
+# setnames(df, n)
+# 
+# dt <- df
 
 # calc --------------------------------------------------------------------
 
-# data.table
-dt2 <- dt[, c("member_id", "day_s", "week_s", "date_s", "diff_min")]
-dt2 <- dt2[ , lapply(.SD, sum), by = .(member_id, day_s, week_s, date_s)]
-setorderv(dt2, c("member_id", "date_s", "day_s"))
+# data.table: min member id  day e
+dt_min <- dt[ , c("member_id", "day_e", "week_e", "date_e", "diff_min")]
+dt_agg <- dt_min[ , lapply(.SD, sum), by = .(member_id, day_e, week_e, date_e)][order(member_id)]
+
+setorderv(dt_agg, c("member_id", "date_e", "day_e"))
+head(dt_agg)
+
+# data.table: hr member id
+diff_hr <- dt[ , c("member_id", "day_e", "week_e", "date_e", "diff_hr")]
+diff_hr <- diff_hr[ , lapply(.SD, sum), by = .(day_e, week_e, date_e, member_id)][order(member_id)]
+dt_agg
 head(dt2)
 
-# data.table
-dt2 <- dt[ , c("member_id", "day_s", "week_s", "date_s", "diff_hr")]
-dt2 <- dt2[ , lapply(.SD, sum), by = .(day_s, week_s, date_s, member_id)]
-setorderv(dt2, c("date_s", "day_s"))
-head(dt2)
-
-# data.table
+# data.table: hr device id date_s
 dt2 <- dt[ , c("device_id", "day_s", "week_s", "date_s", "diff_hr")]
 dt2 <- dt2[ , lapply(.SD, sum), by = .(day_s, week_s, date_s, device_id)]
 setorderv(dt2, c("date_s", "day_s"))
 head(dt2)
-# data.table: date_e
-dt2 <- dt[ , c("device_id", "day_s", "week_e", "date_e", "diff_hr")]
-dt2 <- dt2[ , lapply(.SD, sum), by = .(day_s, week_e, date_e, device_id)]
-setorderv(dt2, c("date_e", "day_s"))
-summary(dt2$diff_hr)
+# data.table: hr device id date_e
+dt2 <- dt[ , c("device_id", "day_e", "week_e", "date_e", "diff_hr")]
+dt2 <- dt2[ , lapply(.SD, sum), by = .(day_e, week_e, date_e, device_id)]
+setorderv(dt2, c("date_e", "day_e"))
+head(dt2)
 
 # total hours each day
-dt_hr <- dt[ , c("date_s", "diff_hr")]
+dt_hr <- dt[ , c("date_s", "diff_hr", "device_id")]
 # sum and keyby date_s
-dt_hr <- dt_hr[ , lapply(.SD, sum), keyby = .(date_s)]
+dt_hr <- dt_hr[ , lapply(.SD, sum), keyby = .(date_s, device_id)]
 head(dt_hr)
 
 # number of members each day
@@ -232,7 +267,7 @@ dt_device <- dt2[ , .N, by = .(date_s, week_s, day_s)]
 head(dt_device)
 
 # cbind
-dt_test <- dt_hr[dt_device][ , avr_hr := diff_hr / N][ , avr_hr := as.numeric(avr_hr)]
+dt_test <- dt_hr[dt_device][ , avr_hr := diff_hr / .N][ , avr_hr := as.numeric(avr_hr)]
 
 # weekdays, weekends
 dt_test[ , weekend := factor(ifelse(week_s == 6, "Sat", ifelse(week_s == 0, "Sun", "weekday")))]
