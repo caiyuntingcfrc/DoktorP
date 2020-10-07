@@ -103,8 +103,15 @@ if(with(dt, all((duration / 1000) == diff_sec, na.rm = TRUE))){
 # filter: account  ids ----------------------------------------------------
 
 # survey
-accID <- expss::read_spss("d:/R_wd/Dr Parenting/survey/20201005_merge.sav") %>% 
-        expss::drop_all_labels() %>% .$app_account_ID
+df <- expss::read_spss("d:/R_wd/Dr Parenting/survey/20201005_merge.sav") %>% 
+    expss::drop_all_labels()
+
+# setDT
+setDT(df)
+
+# accID
+accID <- df$app_account_ID
+
 # Dr parenting
 pccID <- dt$account_id
 # grep
@@ -121,29 +128,30 @@ accountID <- unique(dt$account_id)
 deviceID <- unique(dt$device_id)
 memberID <- unique(dt$member_id)
 
-# setDT
-df <- expss::read_spss("d:/R_wd/Dr Parenting/survey/20201005_merge.sav") %>% 
-    expss::drop_all_labels()
-setDT(df)
-
 l <- list()
 for(i in 1:length(accountID)){
         l[[i]] <- grep(substr(accountID[[i]], 1, 8), df$app_account_ID)
 }
 # assign values
 df[unlist(l), device_id := deviceID]
-df[unlist(l), accound_id := accountID]
+df[unlist(l), account_id := accountID]
 df[unlist(l), member_id := memberID]
 # order
 df <- df[order(member_id)]
 
+token_w1 <- c("prgxfq", "fo7nlx", "och739", "0tztmb", "ubi2fj")
+# 1st wave and 2nd wave
+w1 <- df %>% filter(token %in% token_w1)
+w2 <- df %>% filter(!(token %in% token_w1))
+
+# wave1 -------------------------------------------------------------------
 # calc --------------------------------------------------------------------
 
-# filter after 20200913
-dt <- dt[started_at >= date("2020-09-13"), ]
+# filter account_id
+dt1 <- dt[account_id %in% w1$account_id, ]
 
 # data.table: min member id  day e
-dt_min <- dt[ , c("member_id", "day_e", "week_e", "date_e", "diff_min")]
+dt_min <- dt1[ , c("member_id", "day_e", "week_e", "date_e", "diff_min")]
 dt_agg <- dt_min[ , lapply(.SD, sum), by = .(member_id, day_e, week_e, date_e)][order(member_id)]
 setorderv(dt_agg, c("member_id", "date_e", "day_e"))
 # set key
@@ -160,18 +168,18 @@ dList <- list()
 
 # usage time: average time per week ---------------------------------------
 
-# week
-dt_w <- dt_agg[ , c("member_id", "diff_min", "week")]
-dt_w <- dt_w[ , lapply(.SD, sum), by = .(member_id, week)]
-# freq: weeks per member id
-dt_w <- dt_w[ , .N, by = .(member_id, week, diff_min)][ , lapply(.SD, sum), by = .(member_id)]
-dt_w[ , n_Weeks := N]
-# remove
-dt_w <- dt_w[ , !c("N", "week")]
-# average time per week
-dt_w[ , avrMin_week_all := round(diff_min / n_Weeks, 2)]
-# subset
-d1 <- dt_w[ , c("member_id", "n_Weeks", "avrMin_week_all")]
+# # week
+# dt_w <- dt_agg[ , c("member_id", "diff_min", "week")]
+# dt_w <- dt_w[ , lapply(.SD, sum), by = .(member_id, week)]
+# # freq: weeks per member id
+# dt_w <- dt_w[ , .N, by = .(member_id, week, diff_min)][ , lapply(.SD, sum), by = .(member_id)]
+# dt_w[ , n_Weeks := N]
+# # remove
+# dt_w <- dt_w[ , !c("N", "week")]
+# # average time per week
+# dt_w[ , avrMin_week_all := round(diff_min / n_Weeks, 2)]
+# # subset
+# d1 <- dt_w[ , c("member_id", "n_Weeks", "avrMin_week_all")]
 
 # day
 dt_w <- dt_agg[ , c("member_id", "diff_min", "weekday", "date_e")]
@@ -181,9 +189,7 @@ dt_w <- dt_w[ , lapply(.SD, sum), by = .(member_id)][ , n_Days := N][ , !c("date
 # average time per weekday
 dt_w[ , avrMin_day_all := round(diff_min / n_Days, 2)]
 # subset
-d2 <- dt_w[ , c("member_id", "n_Days", "avrMin_day_all")]
-# merge
-dt_w <- d1[d2, on = "member_id"]
+dt_w <- dt_w[ , c("member_id", "n_Days", "avrMin_day_all")]
 
 head(dt_w)
 
@@ -200,7 +206,7 @@ dt_w <- dt_w[ , lapply(.SD, sum), by = .(member_id)][ , n_Weekdays := N][ , !c("
 # average time per weekday
 dt_w[ , avrMin_weekdays := round(diff_min / n_Weekdays, 2)]
 # subset
-dt_w <- dt_w[ , c("member_id", "n_Weekdays", "avrMin_per_weekday")]
+dt_w <- dt_w[ , c("member_id", "n_Weekdays", "avrMin_weekdays")]
 
 head(dt_w)
 
@@ -237,10 +243,118 @@ dt_w <- d1[d2, on = "member_id"]
 head(dt_w)
 
 dList[[length(dList) + 1]] <- dt_w
-
-# left_join ---------------------------------------------------------------
-
 # merge data list
-d_merge <- Reduce(function(...) left_join(..., by = "member_id"), dList)
+dw1 <- Reduce(function(...) left_join(..., by = "member_id"), dList)
+
+# wave2 -------------------------------------------------------------------
+# calc --------------------------------------------------------------------
+
+# filter after 20200913 and account_id
+dt2 <- dt[started_at >= date("2020-09-13"), ][account_id %in% w2$account_id, ]
+
+# data.table: min member id  day e
+dt_min <- dt2[ , c("member_id", "day_e", "week_e", "date_e", "diff_min")]
+dt_agg <- dt_min[ , lapply(.SD, sum), by = .(member_id, day_e, week_e, date_e)][order(member_id)]
+setorderv(dt_agg, c("member_id", "date_e", "day_e"))
+# set key
+setkey(dt_agg, member_id)
+# as date
+dt_agg[ , date_e := date(date_e)][ , week := week(date_e)]
+# weekend
+dt_agg[, weekday := wday(date_e)]
+dt_agg[ , diff_min := as.numeric((diff_min))]
+
+head(dt_agg)
+
+dList <- list()
+
+# usage time: average time per week ---------------------------------------
+
+# # week
+# dt_w <- dt_agg[ , c("member_id", "diff_min", "week")]
+# dt_w <- dt_w[ , lapply(.SD, sum), by = .(member_id, week)]
+# # freq: weeks per member id
+# dt_w <- dt_w[ , .N, by = .(member_id, week, diff_min)][ , lapply(.SD, sum), by = .(member_id)]
+# dt_w[ , n_Weeks := N]
+# # remove
+# dt_w <- dt_w[ , !c("N", "week")]
+# # average time per week
+# dt_w[ , avrMin_week_all := round(diff_min / n_Weeks, 2)]
+# # subset
+# d1 <- dt_w[ , c("member_id", "n_Weeks", "avrMin_week_all")]
+
+# day
+dt_w <- dt_agg[ , c("member_id", "diff_min", "weekday", "date_e")]
+# freq: days
+dt_w <- dt_w[ , .N, by = .(member_id, date_e, diff_min)]
+dt_w <- dt_w[ , lapply(.SD, sum), by = .(member_id)][ , n_Days := N][ , !c("date_e", "N")]
+# average time per weekday
+dt_w[ , avrMin_day_all := round(diff_min / n_Days, 2)]
+# subset
+dt_w <- dt_w[ , c("member_id", "n_Days", "avrMin_day_all")]
+
+head(dt_w)
+
+dList[[length(dList) + 1]] <- dt_w
+
+# usage time: weekdays ----------------------------------------------------
+
+dt_w <- dt_agg[ , c("member_id", "diff_min", "weekday", "date_e")]
+# exclude Saturday and Sunday
+dt_w <- dt_w[!(weekday %in% c(7, 1)) , ]
+# freq: days
+dt_w <- dt_w[ , .N, by = .(member_id, date_e, diff_min)]
+dt_w <- dt_w[ , lapply(.SD, sum), by = .(member_id)][ , n_Weekdays := N][ , !c("date_e", "N")]
+# average time per weekday
+dt_w[ , avrMin_weekdays := round(diff_min / n_Weekdays, 2)]
+# subset
+dt_w <- dt_w[ , c("member_id", "n_Weekdays", "avrMin_weekdays")]
+
+head(dt_w)
+
+dList[[length(dList) + 1]] <- dt_w
+
+
+# usage time: weekends ----------------------------------------------------
+
+# Saturday
+dt_w <- dt_agg[ , c("member_id", "diff_min", "weekday", "date_e")]
+# Saturday
+dt_w <- dt_w[weekday == 7, ]
+dt_w <- dt_w[ , lapply(.SD, sum), by = .(member_id)]
+# number of Saturdays
+dt_w <- dt_w[ , .N, by = .(member_id, date_e, diff_min)][ , n_Sat := N][ , !c("N", "date_e")]
+# average time per week
+dt_w[ , avrMin_Sat := round(diff_min / n_Sat, 2)]
+d1 <- dt_w[ , c("member_id", "n_Sat", "avrMin_Sat")]
+
+# Sunday
+dt_w <- dt_agg[ , c("member_id", "diff_min", "weekday", "date_e")]
+# Sunday
+dt_w <- dt_w[weekday == 1, ]
+dt_w <- dt_w[ , lapply(.SD, sum), by = .(member_id)]
+# number of Saturdays
+dt_w <- dt_w[ , .N, by = .(member_id, date_e, diff_min)][ , n_Sun := N][ , !c("N", "date_e")]
+# average time per week
+dt_w[ , avrMin_Sun := round(diff_min / n_Sun, 2)]
+d2 <- dt_w[ , c("member_id", "n_Sun", "avrMin_Sun")]
+
+# merge
+dt_w <- d1[d2, on = "member_id"]
+
+head(dt_w)
+
+dList[[length(dList) + 1]] <- dt_w
+# merge data list
+dw2 <- Reduce(function(...) left_join(..., by = "member_id"), dList)
+
+# merge and join ----------------------------------------------------------
+
+d_bind <- rbind(dw1, dw2)
+d_bind <- d_bind[order(avrMin_day_all)]
+
 # merge with df
-df <- df[d_merge, on = "member_id"]
+df <- df[d_bind, on = "member_id"]
+pastecs::stat.desc(df$avrMin_weekdays)
+epiDisplay::des(df)
+saveRDS(df, "d:/R_wd/Dr Parenting/survey/20201007_merge.rds")
