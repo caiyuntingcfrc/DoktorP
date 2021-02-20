@@ -45,6 +45,7 @@ cat("##### file #####\n", paste("The file is ", file_name, sep = ""),
 # read the file -----------------------------------------------------------
 
 # read the file with specified format
+dt <- data.table::fread("d:/R_wd/Dr Parenting/pcc_usagetime/usage_time_20200826-20200925.csv")
 dt <- read_csv(file = file_name, 
                col_types = "cccdTTd")
 # add to analysis file
@@ -354,7 +355,11 @@ d_bind <- rbind(dw1, dw2)
 d_bind <- d_bind[order(avrMin_day_all)]
 
 # merge with df
-df <- df[d_bind, on = "member_id"]
-pastecs::stat.desc(df$avrMin_weekdays)
-epiDisplay::des(df)
-saveRDS(df, "d:/R_wd/Dr Parenting/survey/20201007_merge.rds")
+d_merge <- left_join(df, d_bind, by  = "member_id")
+# encoding
+d_merge$contact_Name <- enc2native(d_merge$contact_Name)
+
+# export
+saveRDS(d_merge, "d:/R_wd/Dr Parenting/proc/20201007_merge.rds")
+
+DescTools::Freq(d_merge$childage)
